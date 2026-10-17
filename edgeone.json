@@ -1,0 +1,132 @@
+{
+  "cloudFunctions": {
+    "nodejs": {
+      "maxDuration": 120
+    }
+  },
+  "schedules": [
+    {
+      "name": "kira-refill-safebooru",
+      "cron": "13 0 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "safebooru"
+      }
+    },
+    {
+      "name": "kira-refill-safedonmai",
+      "cron": "13 2 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "safedonmai"
+      }
+    },
+    {
+      "name": "kira-refill-cosbooru",
+      "cron": "13 4 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "cosbooru"
+      }
+    },
+    {
+      "name": "kira-refill-konachan",
+      "cron": "13 6 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "konachan"
+      }
+    },
+    {
+      "name": "kira-refill-nekosia",
+      "cron": "13 8 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "nekosia"
+      }
+    },
+    {
+      "name": "kira-refill-e-shuushuu",
+      "cron": "13 10 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "e_shuushuu"
+      }
+    },
+    {
+      "name": "kira-refill-pixiv-yuki",
+      "cron": "13 12 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "pixiv_yuki"
+      }
+    },
+    {
+      "name": "kira-refill-pixiv",
+      "cron": "13 14 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "pixiv"
+      }
+    },
+    {
+      "name": "kira-refill-miyoushe-cos",
+      "cron": "13 16 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "miyoushe_cos"
+      }
+    },
+    {
+      "name": "kira-refill-wallhaven",
+      "cron": "13 18 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "wallhaven"
+      }
+    },
+    {
+      "name": "kira-refill-bilibili-opus",
+      "cron": "13 20 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "bilibili_opus"
+      }
+    },
+    {
+      "name": "kira-refill-zerochan",
+      "cron": "13 22 * * *",
+      "timezone": "Asia/Shanghai",
+      "path": "/api/cron/replenish",
+      "method": "POST",
+      "payload": {
+        "source": "zerochan"
+      }
+    }
+  ],
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": "dist"
+}

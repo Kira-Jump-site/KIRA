@@ -22,7 +22,7 @@ const ico=name=>`<svg aria-hidden="true"><use href="#ico-${name}"></use></svg>`;
 /* KIRA! JUMP V6 — real Pixiv metadata snapshot; artwork remains owned by creators. */
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const imageReferrerPolicy=url=>{try{return new URL(url).hostname==='cos.booru.nl'?'strict-origin-when-cross-origin':'no-referrer'}catch{return 'no-referrer'}};
-const allowedImage=u=>{try{const v=new URL(u);return v.protocol==='https:'&&['i.pixiv.re','i.pixiv.nl','i.pixiv.cat','i.pximg.net','i-cf.pximg.net','i.pixiv.moe','cdn.donmai.us','konachan.net','konachan.com','safebooru.org','upload-bbs.miyoushe.com','th.wallhaven.cc','cdn.nekosia.cat','yande.re','files.yande.re','assets.yande.re','cos.booru.nl','cdn.e-shuushuu.net','i0.hdslb.com','i1.hdslb.com','i2.hdslb.com','static.zerochan.net','s1.zerochan.net','s2.zerochan.net','s3.zerochan.net'].includes(v.hostname)?v.href:null}catch{return null}};
+const allowedImage=u=>{try{const v=new URL(u);return v.protocol==='https:'&&['i.pixiv.re','i.pixiv.nl','i.pixiv.cat','i.pximg.net','i-cf.pximg.net','i.pixiv.moe','cdn.donmai.us','konachan.net','konachan.com','safebooru.org','upload-bbs.miyoushe.com','th.wallhaven.cc','cdn.nekosia.cat','yande.re','files.yande.re','assets.yande.re','cos.booru.nl','cdn.e-shuushuu.net','i0.hdslb.com','i1.hdslb.com','i2.hdslb.com','static.zerochan.net','s1.zerochan.net','s2.zerochan.net','s3.zerochan.net','w.wallhaven.cc'].includes(v.hostname)?v.href:null}catch{return null}};
 /* These are ONLY explicit-user-request original CDN images. Never include them
  * in thumb/sample preloads, decoded warmImages or SW CacheStorage. */
 function validatedOriginal(raw,source){
@@ -1979,16 +1979,9 @@ async function loadLiveArtwork({force=false,first=false,auto=false,deep=false,on
     // Every successful user-triggered discovery helps grow the shared D1
     // catalogue. The Worker refetches the fixed provider/page itself, so browser
     // metadata is never trusted for writes. Deep scrolls may persist up to 3 pages.
-    if(DB_CHANNELS.has(provider)&&provider!=='pixiv'){
-     const pages=[...new Set(Array.isArray(result.pages)?result.pages:[result.page])]
-      .filter(page=>Number.isSafeInteger(page)&&page>=1&&page<=75).slice(0,deep?3:1);
-     if(pages.length)persistTasks.push(fetch('/api/catalog/refresh',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({source:provider,pages}),
-      signal:AbortSignal.timeout(deep?18000:12000)})
-      .then(async response=>response.ok?response.json():null)
-      .then(info=>{if(info?.ok)persistedTotal+=Number(info.new_posts)||0})
-      .catch(()=>{}));
-    }
+    // The Cloud Function /api/discover persists parsed works to EdgeOne Blob.
+    // Only ask for extra batches when this individual source's inventory is low.
+    if(DB_CHANNELS.has(provider))requestSourceRefillIfLow(provider);
     found++;
     if(result.viaBackup)usedBackup=true;
     const known=new Set(WORKS.map(w=>w.id));
@@ -2186,12 +2179,30 @@ loadDatabaseOpus();
  * If the database isn't bound, the existing live discovery adapter can still
  * serve that channel; a missing DB is never called a populated catalogue.
  */
-const DB_CHANNELS=new Set(['bilibili_opus','pixiv','konachan','safebooru','safedonmai','nekosia','e_shuushuu','pixiv_yuki','zerochan','miyoushe_cos','cosbooru']);
+const DB_CHANNELS=new Set(['bilibili_opus','pixiv','konachan','safebooru','safedonmai','nekosia','e_shuushuu','pixiv_yuki','zerochan','miyoushe_cos','cosbooru','wallhaven']);
 // Bucket random seeds so hundreds of visitors can share short-lived CDN/D1 gateway cache entries.\n// 257 rotations still provide broad per-visit variety without a unique cache key per user.\nconst D1_RANDOM_SEED=1+(crypto.getRandomValues(new Uint32Array(1))[0]%257);
 const DB_FETCHES=new Map();
 const DB_CURSORS=new Map();
 const DB_EXHAUSTED=new Set();
+const DB_ARCHIVE_CURSORS=new Map();
+const DB_ARCHIVE_EXHAUSTED=new Set();
 const DB_LAST_HEAD_CHECK=new Map();
+const KIRA_REFILL_REQUEST_AT=new Map();
+function requestSourceRefillIfLow(source){
+ if(!DB_CHANNELS.has(source)||!navigator.onLine)return;
+ const remaining=WORKS.reduce((sum,w)=>sum+(w.source===source&&!viewHistory.includes(w.id)?1:0),0);
+ if(remaining>=48)return;
+ const now=Date.now(),previous=KIRA_REFILL_REQUEST_AT.get(source)||0;
+ if(now-previous<3*3600*1000)return;
+ KIRA_REFILL_REQUEST_AT.set(source,now);
+ fetch('/api/catalog/refresh',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({source,remaining}),signal:AbortSignal.timeout(20000)})
+  .then(response=>response.ok?response.json():null)
+  .then(result=>{if(result?.published>0){
+    DB_EXHAUSTED.delete(source);DB_ARCHIVE_EXHAUSTED.delete(source);
+    DB_CURSORS.delete(source);DB_ARCHIVE_CURSORS.delete(source);
+  }}).catch(()=>{});
+}
 let lastFreshCatalogCheck=0;
 async function loadNewlyIndexedCatalog({force=false,appendOnly=false}={}){
  // Continue reading older indexed rows using the existing keyset cursor.
@@ -2206,7 +2217,7 @@ async function loadNewlyIndexedCatalog({force=false,appendOnly=false}={}){
  if(!eligible.length)return 0;
  const results=await Promise.allSettled(eligible.map(async source=>{
   if(DB_FETCHES.has(source))return DB_FETCHES.get(source);
-  if(!DB_EXHAUSTED.has(source))
+  if(!DB_EXHAUSTED.has(source)||!DB_ARCHIVE_EXHAUSTED.has(source))
    return loadDatabaseSource(source,{pages:appendOnly?3:1,appendOnly});
   if(now-(DB_LAST_HEAD_CHECK.get(source)||0)<90000)return 0;
   DB_LAST_HEAD_CHECK.set(source,now);
@@ -2218,16 +2229,18 @@ async function loadNewlyIndexedCatalog({force=false,appendOnly=false}={}){
 async function loadDatabaseSource(source,{pages=2,restart=false,appendOnly=false}={}){
  if(!DB_CHANNELS.has(source))return 0;
  if(DB_FETCHES.has(source))return DB_FETCHES.get(source);
- if(restart){DB_CURSORS.delete(source);DB_EXHAUSTED.delete(source)}
- if(DB_EXHAUSTED.has(source))return 0;
+ if(restart){DB_CURSORS.delete(source);DB_EXHAUSTED.delete(source);DB_ARCHIVE_CURSORS.delete(source);DB_ARCHIVE_EXHAUSTED.delete(source)}
+ if(DB_EXHAUSTED.has(source)&&DB_ARCHIVE_EXHAUSTED.has(source))return 0;
  const task=(async()=>{
   let addedTotal=0;
   const seenCursors=new Set();
   for(let i=0;i<Math.min(3,Math.max(1,pages));i++){
-   const cursor=DB_CURSORS.get(source)||'';
-   if(seenCursors.has(cursor))break;
-   seenCursors.add(cursor);
-   const url='/api/catalog?source='+encodeURIComponent(source)+'&limit=60&order=random&seed='+D1_RANDOM_SEED+
+   const archived=DB_EXHAUSTED.has(source);
+   const cursor=archived?(DB_ARCHIVE_CURSORS.get(source)||''):(DB_CURSORS.get(source)||'');
+   if(seenCursors.has((archived?'archive:':'catalog:')+cursor))break;
+   seenCursors.add((archived?'archive:':'catalog:')+cursor);
+   const url=(archived?'/api/catalog/archive?source='+encodeURIComponent(source)+'&limit=60':
+    '/api/catalog?source='+encodeURIComponent(source)+'&limit=60&order=random&seed='+D1_RANDOM_SEED)+
     (cursor?'&cursor='+encodeURIComponent(cursor):'');
    const response=await fetch(url,{cache:restart?'no-store':'default',signal:AbortSignal.timeout(10000)});
    if(!response.ok)break;
@@ -2236,7 +2249,8 @@ async function loadDatabaseSource(source,{pages=2,restart=false,appendOnly=false
    const records=[];
    for(const work of payload.works){
     if(work.source!==source||!Array.isArray(work.images))continue;
-    const pid=source==='bilibili_opus'?kiraStablePostNumber(work.source_post_id):Number(work.source_post_id);
+    const numeric=Number(work.source_post_id);
+    const pid=source==='bilibili_opus'||!Number.isSafeInteger(numeric)||numeric<1?kiraStablePostNumber(work.source_post_id):numeric;
     if(!Number.isSafeInteger(pid)||pid<1)continue;
     for(const image of work.images.slice(0,32)){
      if(!Number.isSafeInteger(image.image_index)||image.image_index<0||image.image_index>31)continue;
@@ -2252,8 +2266,13 @@ async function loadDatabaseSource(source,{pages=2,restart=false,appendOnly=false
    const prepared=normalizeSnapshot({channels:{[source]:records}});
    prepared.forEach(w=>preparedFeedIds.add(w.id));
    addedTotal+=mergeWorks(prepared);
-   if(typeof payload.next_cursor==='string'&&/^r:(?:0|[1-9][0-9]{0,5}):[1-9][0-9]{9}$/.test(payload.next_cursor)&&
-      payload.next_cursor!==cursor)DB_CURSORS.set(source,payload.next_cursor);
+   if(archived){
+    if(typeof payload.next_cursor==='string'&&payload.next_cursor.length<1024&&payload.next_cursor!==cursor)
+     DB_ARCHIVE_CURSORS.set(source,payload.next_cursor);
+    else {DB_ARCHIVE_EXHAUSTED.add(source);break}
+   }else if(typeof payload.next_cursor==='string'&&
+    /^(?:r:(?:0|[1-9][0-9]{0,5}):[1-9][0-9]{9}|v2:[nr]:[0-9]{1,10}:[0-9]{1,5}:[0-9]{1,3}:[0-9]{1,5})$/.test(payload.next_cursor)&&
+    payload.next_cursor!==cursor)DB_CURSORS.set(source,payload.next_cursor);
    else {DB_EXHAUSTED.add(source);break}
   }
   if(addedTotal&&!appendOnly&&!state.focus&&isVisibleDiscoveryProvider(source)){
@@ -2264,6 +2283,7 @@ async function loadDatabaseSource(source,{pages=2,restart=false,appendOnly=false
     if(extra.length){state.shown.push(...extra);appendFeedBatch();}
    }
   }
+  if(addedTotal<48)requestSourceRefillIfLow(source);
   return addedTotal;
  })().catch(error=>{console.info('KIRA source catalogue unavailable',source,String(error).slice(0,60));return 0});
  DB_FETCHES.set(source,task);
@@ -2278,7 +2298,7 @@ async function loadPreparedCatalog(){
  if(EDGEONE_DOMESTIC&&!preferred.includes('bilibili_opus'))preferred.unshift('bilibili_opus');
  const first=[...new Set(preferred)].slice(0,3);
  await Promise.allSettled(first.map(source=>loadDatabaseSource(source,{pages:1})));
- const archives=['bilibili_opus','pixiv','konachan','safebooru','nekosia','e_shuushuu','pixiv_yuki','miyoushe_cos','cosbooru','safedonmai','zerochan']
+ const archives=['bilibili_opus','pixiv','konachan','safebooru','nekosia','e_shuushuu','pixiv_yuki','miyoushe_cos','cosbooru','safedonmai','zerochan','wallhaven']
   .filter(x=>!first.includes(x));
  if(state.sourceFilter==='all'||state.sourceFilter==='everything'){
   setTimeout(()=>{if(!state.focus)void Promise.allSettled(archives.slice(0,4).map(source=>loadDatabaseSource(source,{pages:1,appendOnly:true})))},2600);
