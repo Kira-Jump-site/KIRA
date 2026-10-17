@@ -1,0 +1,46 @@
+name: One-time KIRA original recovery import
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kira-import.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Download exact verified KIRA archive
+        env:
+          ARCHIVE_URL: https://sb-3to5xtrvak9j.vercel.run/KIRA-recovered-20261017.tar.gz
+          ARCHIVE_SHA256: 2a210af3f950a6e7c15da8b2bc9fdc0ec68bb6e2cfd27f0d98791cd434926aae
+        run: |
+          set -euo pipefail
+          curl -fLSs --retry 5 --retry-all-errors --max-time 180 "$ARCHIVE_URL" -o /tmp/kira-source.tar.gz
+          echo "$ARCHIVE_SHA256  /tmp/kira-source.tar.gz" | sha256sum --check
+          tar -tzf /tmp/kira-source.tar.gz | tee /tmp/kira-paths.txt
+          if grep -E '(^/|(^|/)\.\.(/|$))' /tmp/kira-paths.txt; then echo "Unsafe archive path"; exit 1; fi
+      - name: Restore one complete source tree and make final commit
+        run: |
+          set -euo pipefail
+          rm -rf .github
+          tar -xzf /tmp/kira-source.tar.gz -C .
+          test -s public/index.html
+          test -s public/assets/catalog/manifest.json
+          test -s public/assets/app.js
+          test -s package.json
+          node --check public/assets/app.js
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run build
+          git config user.name "KIRA Recovery"
+          git config user.email "kira-recovery@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "No new changes"; exit 1; }
+          git commit -m "Restore KIRA original EdgeOne site, Cloudflare evidence, and catalog migration"
+          git push origin HEAD:main
