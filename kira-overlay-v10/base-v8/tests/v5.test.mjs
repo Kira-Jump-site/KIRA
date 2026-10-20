@@ -1,0 +1,20 @@
+import {test} from 'node:test';import {strict as assert} from 'node:assert';
+import {canonicalTag,normalizeWorkTags,sourceTagged,TAG_ALIASES} from '../lib/tag-ontology-v5.mjs';
+import {sourceMetric,evaluateSourcePool,mediaGate,inventoryTargets,SOURCE_POPULARITY_SIGNALS} from '../lib/source-popularity-v5.mjs';
+const image={image_index:0,width:1800,height:2600,media_status:'verified'};
+function work(source,metric=undefined,extra={}){return {source,source_post_id:String(Math.random()),rating:'safe',images:[image],media_status:'verified',source_score_raw:metric, ...extra};}
+test('12 sources each declare explicit native popularity signals, including unscored',()=>assert.equal(Object.keys(SOURCE_POPULARITY_SIGNALS).length,12));
+test('multilingual aliases collapse to same ID',()=>{for(const t of ['初音未来','初音ミク','hatsune-miku'])assert.equal(canonicalTag(t),'character:hatsune_miku');assert.equal(canonicalTag('鸣潮'),canonicalTag('Wuthering Waves'))});
+test('typed Booru categories preserve native distinction',()=>{const meta=normalizeWorkTags({source:'safedonmai',source_tag_groups:{artist:['some_artist'],character:['hatsune_miku'],copyright:['genshin_impact'],general:['blue_hair']},raw_tags:['some_artist','blue_hair']});assert.ok(meta.normalized_tag_ids.includes('artist:some_artist'));assert.ok(meta.normalized_tag_ids.includes('character:hatsune_miku'));assert.ok(meta.normalized_tag_ids.includes('ip:genshin_impact'));assert.equal(sourceTagged(meta,['初音ミク']),true);assert.ok(meta.raw_tags.includes('some_artist'))});
+test('unclassified source tag cannot magically become artist',()=>{const m=normalizeWorkTags({source:'konachan',tags:['colorful_hair','strange-tag']});assert.ok(m.normalized_tag_ids.includes('source:konachan:colorful_hair'));assert.equal(m.normalized_tag_ids.some(x=>x.startsWith('artist:')),false)});
+test('unknown tags retained and same ASCII separator canonicalized',()=>assert.equal(canonicalTag('hello-world'),canonicalTag('hello_world')));
+test('Pixiv display attributes do not turn into upstream score',()=>{const v=sourceMetric(work('pixiv',null,{images:[{width:8000,height:8000}],author:'a',title:'Artwork'}));assert.equal(v.value,null);assert.equal(v.method,'unrated')});
+test('Nekosia has NO native popularity signal',()=>{const w=work('nekosia',null,{source_score_raw:999,views_raw:999});assert.equal(sourceMetric(w).value,null)});
+test('all unscored pool has null scores, not 100',()=>{const w=Array.from({length:16},(_,i)=>({...work('nekosia'),source_post_id:String(i)}));assert.ok(evaluateSourcePool(w,{maxItems:20}).every(x=>x.quality_score===null&&x.popularity_status==='unrated'))});
+test('score ranked only with enough real score reference',()=>{const items=Array.from({length:24},(_,i)=>work('konachan',i+1));const r=evaluateSourcePool(items,{maxItems:30});assert.ok(r[0].quality_score>r[23].quality_score);assert.ok(r.every(x=>x.source_score_confidence===1))});
+test('source missing reference is insufficient, not false percentile',()=>{const r=evaluateSourcePool([work('safebooru',100)]);assert.equal(r[0].quality_score,null);assert.equal(r[0].popularity_status,'insufficient_reference')});
+test('high resolution is eligibility, not popularity',()=>{const a=work('konachan',1),b=work('konachan',2,{images:[{...image,width:9000,height:9000}]});assert.ok(sourceMetric(b).value>sourceMetric(a).value);assert.equal(sourceMetric(b).source_signals.source_score_raw,2)});
+test('broken or unchecked media never admitted',()=>{for(const s of ['failed','unchecked'])assert.equal(mediaGate(work('pixiv',50,{media_status:s})).eligible,false)});
+test('miyoushe must be known cosplay and rating reviewed',()=>{assert.equal(mediaGate(work('miyoushe_cos',999,{content_type:'illustration'})).eligible,false);assert.equal(mediaGate(work('miyoushe_cos',999,{content_type:'cosplay'})).eligible,true)});
+test('12 independent stock quotas',()=>{const a=inventoryTargets({safebooru:900,konachan:1});assert.equal(a.safebooru.need,0);assert.equal(a.konachan.need,119);assert.equal(Object.keys(a).length,12)});
+test('typed alias dictionary has practical coverage beyond 12 IDs',()=>assert.ok(TAG_ALIASES.length>=35));

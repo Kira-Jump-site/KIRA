@@ -1,0 +1,13 @@
+import {test} from 'node:test';import {strict as assert} from 'node:assert';
+import {readFileSync} from 'node:fs';
+import {verifyAllMedia,reviewWork,newlyDiscovered} from './mock-unit/moderation-under-test-v10.mjs';
+const root=new URL('../',import.meta.url);
+test('moderation fixture matches real patched implementation',()=>{let source=readFileSync(new URL('lib/moderation-v9.mjs',root),'utf8');for(const dep of ['tag-knowledge-v9','blob-catalog','media-health','review-state-v9'])source=source.replaceAll(`from './${dep}.mjs'`, "from './review-store-doubles.mjs'");assert.equal(source,readFileSync(new URL('tests/mock-unit/moderation-under-test-v10.mjs',root),'utf8'))});
+const im=()=>({image_index:0,thumbnail_url:'https://example.org/t.webp',preview_url:'https://example.org/p.webp',media_status:'verified',media_checked_at:Math.floor(Date.now()/1000)-90});
+test('fresh verified proof skips costly duplicate high-preview probes on approval',async()=>{const w={source:'pixiv',media_status:'verified',images:[im()]};const result=await verifyAllMedia(w,{fetcher:()=>{throw Error('network forbidden')}});assert.equal(result.verified,true);assert.equal(result.checked,0)});
+test('stale media proof triggers fresh verification instead of trusting stale sample',async()=>{const w={source:'pixiv',media_status:'verified',images:[{...im(),media_checked_at:Math.floor(Date.now()/1000)-25000}]};await assert.rejects(verifyAllMedia(w),/unexpected_media_network_call/)});
+test('direct administrator request cannot bypass pre-admission quality filter',async()=>{const w=newlyDiscovered({source:'pixiv',source_post_id:'1',rating:'safe',images:[im()],media_status:'verified'});
+ const store={works:new Map([['pixiv:1',w]]),revisions:new Map()};
+ await assert.rejects(reviewWork(store,{source:'pixiv',source_post_id:'1',action:'approve',expected_revision:'live'}),/quality_admission_required/);
+ assert.equal(store.works.get('pixiv:1').visibility,'pending');
+});

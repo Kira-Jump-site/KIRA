@@ -1,1 +1,14 @@
-{"name":"kira-jump-original-recovery","version":"7.35.0-recovery","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs","test":"node --test tests/*.test.mjs","check":"node --check public/assets/app.js && npm test"},"dependencies":{"@edgeone/pages-blob":"^0.0.18"}}
+{
+  "name": "kira-jump-original-recovery",
+  "version": "7.35.0-recovery",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/prepare-kira-v10.mjs && node scripts/build.mjs",
+    "test": "node scripts/prepare-kira-v10.mjs && node --test tests/*.test.mjs",
+    "check": "node scripts/prepare-kira-v10.mjs && node --check public/assets/app.js && npm test"
+  },
+  "dependencies": {
+    "@edgeone/pages-blob": "^0.0.18"
+  }
+}
