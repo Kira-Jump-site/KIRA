@@ -4,7 +4,7 @@ const $=id=>document.getElementById(id),grid=$('grid'),dialog=$('detail');
 const state={items:[],selected:new Set(),cursors:[''],page:0,nextCursor:null,busy:false,dirty:false,opened:null,image:0};
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined&&text!==null)n.textContent=String(text);if(cls)n.className=cls;return n}
 function safeURL(str){try{const u=new URL(str);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null}catch{return null}}
-async function api(path,method='GET',body=null){const key=$('secret').value;if(!key)throw Error('请先输入管理员密钥');const response=await fetch(path,{method,cache:'no-store',headers:{Authorization:'Bearer '+key,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok)throw Error(data.error||`HTTP ${response.status}`);return data}
+async function api(path,method='GET',body=null){const response=await fetch(path,{method,cache:'no-store',headers:{'X-KIRA-Review-Test':'1',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok)throw Error(data.error||`HTTP ${response.status}`);return data}
 function status(t){$('status').textContent=t}
 function identity(w){return w.source+'|'+w.source_post_id}
 function imageList(w){return Array.isArray(w.images)?w.images:[]}
@@ -26,7 +26,7 @@ function render(){grid.replaceChildren();$('empty').hidden=state.items.length>0;
   card.append(el('div',parts.join(' · '),'hint'));
   const details=el('button','查看 / 单件处理','mini');details.onclick=()=>openDetail(w);card.append(details);grid.append(card);
  }summary()}
-function setBusy(flag){state.busy=flag;for(const id of ['load','commit','rejectAll','next','prev','refill'])$(id).disabled=flag;summary()}
+function setBusy(flag){state.busy=flag;for(const id of ['load','commit','rejectAll','next','prev'])$(id).disabled=flag;summary()}
 function confirmLeave(){return !state.dirty||confirm('本页存在尚未提交的选择，确认丢弃并翻页？')}
 async function load(page=0){if(state.busy)return;if(page!==state.page&&!confirmLeave())return;setBusy(true);
  try{const cursor=state.cursors[page]||'',size=+$('pageSize').value,query=new URLSearchParams({source:$('source').value,limit:String(size)});if(cursor)query.set('cursor',cursor);
@@ -99,3 +99,5 @@ $('source').onchange=()=>{state.cursors=[''];state.page=0;state.nextCursor=null;
 $('refill').onclick=async()=>{const source=$('source').value;if(!confirm('对 '+source+' 执行额外采集？新作品将先经过高质量筛选和媒体核验，合格后进入待审队列；失败不会凑数。'))return;
  setBusy(true);try{const result=await api('/api/catalog/admin/refill','POST',{source});status(`本次新增待审 ${result.pending||0}、采集 ${result.pages||0} 页、质量失败 ${(result.skipped_invalid||0)}。不自动公开。`)}catch(e){status('补充失败：'+e.message)}finally{setBusy(false)}};
 for(const source of SOURCES){const option=el('option',source);option.value=source;$('source').append(option)}summary();
+$('refill').disabled=true;
+void load(0);

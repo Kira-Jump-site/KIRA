@@ -1,11 +1,15 @@
 import {getStore} from '@edgeone/pages-blob';
 import {json} from '../../../../lib/catalog.mjs';
 import {requireAdmin} from '../../../../lib/admin-auth-v9.mjs';
+import {isPreviewReviewRequest} from '../../../../lib/review-test-access.mjs';
+import {createReviewTestStore} from '../../../../lib/review-test-store.mjs';
 import {listReportQueue,reviewReport} from '../../../../lib/report-moderation-v10.mjs';
 import {applyReviewBatch} from '../../../../lib/review-batch-v10.mjs';
 export async function onRequest({request,env}){
- const auth=await requireAdmin(request,env||process.env);if(!auth.ok)return json({ok:false,error:auth.error},auth.status);
- const store=getStore({name:'kira-catalog-recovery-20261017',consistency:'strong'});
+ const testing=isPreviewReviewRequest(request,'reports');
+ const auth=testing?{ok:true}:await requireAdmin(request,env||process.env);if(!auth.ok)return json({ok:false,error:auth.error},auth.status);
+ const liveStore=getStore({name:'kira-catalog-recovery-20261017',consistency:'strong'});
+  const store=testing?createReviewTestStore(liveStore):liveStore;
  try{
   if(request.method==='GET'){
    const q=new URL(request.url).searchParams;

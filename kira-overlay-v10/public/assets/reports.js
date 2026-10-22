@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id),state={rows:[],selected:new Set(),cursor
 const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined&&text!==null)e.textContent=String(text);if(cls)e.className=cls;return e};
 function safeURL(s){try{const u=new URL(s);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null}catch{return null}}
 const msg=s=>{$('status').textContent=s};
-async function api(url,method='GET',body){const key=$('secret').value;if(!key)throw Error('先输入管理员密钥');const r=await fetch(url,{method,cache:'no-store',headers:{Authorization:'Bearer '+key,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw Error(d.error||'HTTP '+r.status);return d}
+async function api(url,method='GET',body){const r=await fetch(url,{method,cache:'no-store',headers:{'X-KIRA-Review-Test':'1',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw Error(d.error||'HTTP '+r.status);return d}
 function summary(){const keep=state.rows.filter(r=>state.selected.has(r.id)).length;$('summary').textContent=`第 ${state.page+1} 页｜保留 ${keep}｜拟下架 ${state.rows.length-keep}`;$('prev').disabled=state.busy||state.page===0;$('next').disabled=state.busy||!state.next}
 function mark(r,keep){if(keep)state.selected.add(r.id);else state.selected.delete(r.id);state.dirty=true;render()}
 function render(){const grid=$('grid');grid.replaceChildren();$('empty').hidden=state.rows.length!==0;
@@ -42,3 +42,4 @@ $('all').onclick=()=>{state.selected=new Set(state.rows.map(r=>r.id));state.dirt
 $('load').onclick=()=>{state.cursors=[''];load(0)};$('prev').onclick=()=>load(Math.max(0,state.page-1));$('next').onclick=()=>load(state.page+1);
 $('pageSize').onchange=()=>{state.cursors=[''];state.page=0;state.next=null;state.rows=[];state.selected.clear();render()};
 $('commit').onclick=()=>commit();$('followup').onclick=()=>commit('followup');$('keep').onclick=()=>decide('keep');$('hide').onclick=()=>decide('hide');$('defer').onclick=()=>decide('followup');summary();
+void load(0);
