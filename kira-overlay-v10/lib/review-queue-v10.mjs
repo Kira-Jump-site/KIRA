@@ -1,10 +1,11 @@
 /** Cursor-paginated, bounded review queue. Never silently pulls preview/original bytes. */
-import {findWork} from './blob-catalog.mjs';
+import {loadCatalogChangeHeads} from './blob-catalog.mjs';
 const PREFIX='catalog/v2/live/items/';
 export async function listQualityQueue(store,{source,cursor='',limit=100}={}){
  if(!/^[a-z0-9_]{2,50}$/.test(String(source))||typeof cursor!=='string'||cursor.length>2048||!Number.isSafeInteger(limit)||limit<1||limit>100)
   throw Error('invalid_queue_query');
  const prefix=PREFIX+source+'/';
+ const heads=await loadCatalogChangeHeads(store,source);
  const works=[];
  let nextCursor=cursor||'',scanned=0,rounds=0;
  // A page with many already-reviewed items should still fill up to 100 cards.
@@ -19,7 +20,7 @@ export async function listQualityQueue(store,{source,cursor='',limit=100}={}){
    const slice=await Promise.all(keys.slice(n,n+10).map(async key=>{
     const entity=await store.get(key,{type:'json',consistency:'strong'}),w=entity?.work;
     if(!w||w.source!==source||!w.source_post_id)return null;
-    const versioned=await findWork(store,source,w.source_post_id);
+    const versioned=heads.get(w.source_post_id);
     const current=versioned?.work||w;
     if(current.visibility!=='pending'||current.review_status==='rejected'||current.review_status==='approved')return null;
     if(current.quality_admission?.eligible!==true)return null;

@@ -51,6 +51,9 @@ try{
  await patch('lib/blob-catalog.mjs',s=>exact(s,
   'const merged=new Map(recent.map(w=>[w.source_post_id,w]));',
   'const merged=new Map(recent.filter(w=>Number(w.review_policy_version||0)>=1).map(w=>[w.source_post_id,w]));','legacy-live-privacy'));
+ await patch('lib/blob-catalog.mjs',s=>exact(s,
+  "export async function findWork(store,source,id){",
+  "/** One revision-index read per moderation page instead of per card. */\nexport async function loadCatalogChangeHeads(store,source){\n if(!safeSource(source))throw Error('invalid_source');\n return changeHeads(store,source);\n}\nexport async function findWork(store,source,id){", 'review-queue-revision-snapshot'));
  await patch('lib/live-archive.mjs',s=>exact(s,
   'const isPublic=isApprovedPublic;',
   'const isPublic=w=>Number(w?.review_policy_version||0)>=1&&isApprovedPublic(w);','archive-live-privacy'));
