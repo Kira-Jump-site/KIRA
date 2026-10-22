@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/prepare-kira-v10.mjs && node scripts/build.mjs",
+    "build": "node scripts/prepare-kira-v10.mjs && node scripts/build.mjs && node scripts/check-kira-pages.mjs",
     "test": "node scripts/prepare-kira-v10.mjs && node --test tests/*.test.mjs",
     "check": "node scripts/prepare-kira-v10.mjs && node --check public/assets/app.js && npm test"
   },

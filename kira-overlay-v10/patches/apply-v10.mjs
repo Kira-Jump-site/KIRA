@@ -20,7 +20,7 @@ async function patch(p,fn){const content=await readFile(join(stage,p),'utf8');aw
 try{
  for(const p of initial)await write(p,await readFile(join(root,p),'utf8'));
  // Includes strict ae1ec9d Git-blob SHA whitelist and v8 source verification.
- execFileSync(process.execPath,[join(overlay,'patches/apply-v9.mjs'),stage],{stdio:'pipe'});
+ execFileSync(process.execPath,[join(overlay,'patches/apply-v9.mjs'),stage],{stdio:'inherit'});
  const copied=['lib/source-adapters.mjs','lib/source-policy.mjs','lib/metadata-schema.mjs','lib/live-ingest.mjs','lib/replenish.mjs','lib/media-health.mjs',
  'lib/tag-ontology-v5.mjs','lib/source-popularity-v5.mjs','lib/source-evidence-v6.mjs','lib/media-dimensions-v6.mjs',
  'lib/source-details-v7.mjs','lib/source-tag-registry-v8.mjs','lib/blob-catalog.mjs','lib/live-archive.mjs',
@@ -87,7 +87,7 @@ try{
   'tests/mock-unit/moderation-under-test-v10.mjs'];
  for(const p of sources){await write(p,await readFile(join(overlay,p),'utf8'));stagedPaths.add(p)}
  // Verify all JS syntax BEFORE modifying the target working copy.
- for(const p of stagedPaths){if(/\.m?js$/.test(p))execFileSync(process.execPath,['--check',join(stage,p)],{stdio:'pipe'})}
+ for(const p of stagedPaths){if(/\.m?js$/.test(p))execFileSync(process.execPath,['--check',join(stage,p)],{stdio:'inherit'})}
  // Do not overwrite unrelated files; only v8-v10 changed sources are copied.
  stagedPaths.delete('package.json');stagedPaths.delete('edgeone.json');
  stagedPaths.delete('lib/catalog.mjs');stagedPaths.delete('lib/live-read.mjs');stagedPaths.delete('lib/tag-dictionary.mjs');

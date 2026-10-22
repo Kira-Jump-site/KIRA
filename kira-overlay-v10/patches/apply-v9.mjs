@@ -39,7 +39,7 @@ const written=new Set();
 try{
  for(const p of startFiles){const value=await readFile(join(root,p),'utf8');if(expected[p]&&sha(value)!==expected[p])throw Error(`${p}: source changed from verified ae1ec9d; abort. SHA ${sha(value)} != ${expected[p]}`);await write(p,value)}
  // The uncommitted v8 patch itself also SHA-checks ALL six source files before changing any.
- execFileSync(process.execPath,[join(overlay,'base-v8/patches/apply-kira-v8.mjs'),stage],{stdio:'pipe'});
+ execFileSync(process.execPath,[join(overlay,'base-v8/patches/apply-kira-v8.mjs'),stage],{stdio:'inherit'});
  for(const p of ['lib/source-adapters.mjs','lib/source-policy.mjs','lib/metadata-schema.mjs','lib/live-ingest.mjs','lib/replenish.mjs','lib/media-health.mjs'])written.add(p);
  for(const p of ['tag-ontology-v5.mjs','source-popularity-v5.mjs','source-evidence-v6.mjs','media-dimensions-v6.mjs','source-details-v7.mjs','source-tag-registry-v8.mjs'])written.add('lib/'+p);
  await modify('lib/live-ingest.mjs',s=>{
@@ -48,12 +48,12 @@ try{
  const sourceTag=tag.includes(':')?(sourceQueryForTag(knowledge,source,tag).source_tag||tag):tag;
  const parsed=preparsed||await discoverSource(source,{`,'live-knowledge-before-discovery');
    s=replaceOnce(s,'tag,cursor:sourceCursor,mode:popular?policy.mode:', 'tag:sourceTag,cursor:sourceCursor,mode:popular?policy.mode:', 'live-source-dictionary-query');
-   s=replaceOnce(s,'   try{normalized=normalizeWork(work)}catch{rejected++;continue}',"   try{normalized=normalizeWork(work);normalized=newlyDiscovered({...normalized,...resolveWorkKnowledge(normalized,knowledge)});}catch{rejected++;continue}",'live-ingest policy');
+   s=replaceOnce(s,'  try{normalized=normalizeWork(work)}catch{rejected++;continue}',"   try{normalized=normalizeWork(work);normalized=newlyDiscovered({...normalized,...resolveWorkKnowledge(normalized,knowledge)});}catch{rejected++;continue}",'live-ingest policy');
    s=replaceOnce(s,"if(needsMediaCheck&&normalized.media_status!=='verified'){rejected++;continue;}","if(needsMediaCheck&&normalized.media_status!=='verified'){normalized.visibility='pending';}",'retain failed-media candidates pending');
    s=replaceOnce(s,"const key=keyOf(source,normalized.source_post_id);","if(source==='pixiv'||source==='pixiv_yuki'){\n   const sibling=source==='pixiv'?'pixiv_yuki':'pixiv';\n   if(await getLiveItem(store,sibling,normalized.source_post_id))continue;\n  }\n  const key=keyOf(source,normalized.source_post_id);",'pixiv_shared_origin_dedup');
    // Blob does NOT document onlyIfNew/CAS; avoid overwriting an existing reviewed item.
-   const blockStart=s.indexOf('   let stored=normalized;');
-   const blockEnd=s.indexOf('   // Idempotent index repair:',blockStart);
+   const blockStart=s.indexOf('  let stored=normalized;');
+   const blockEnd=s.indexOf('  // Idempotent index repair:',blockStart);
    if(blockStart<0||blockEnd<=blockStart)throw Error('live-item-write-boundary-not-found');
    s=s.slice(0,blockStart)+`   let stored=normalized;
    const already=await store.get(key,{type:'json',consistency:'strong'});
