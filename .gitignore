@@ -9,3 +9,5 @@ evidence/
 *.zip
 
 backups/
+
+.secrets/

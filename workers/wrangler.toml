@@ -1,0 +1,10 @@
+name = "kira-source-relay"
+main = "kira-source-relay.mjs"
+compatibility_date = "2026-11-07"
+workers_dev = true
+
+[vars]
+KIRA_INGEST_URL = "https://kira.casto.top/api/catalog/worker-ingest"
+
+[triggers]
+crons = ["*/10 * * * *"]
