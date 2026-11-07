@@ -7,8 +7,8 @@ if(kiraDetails)kiraDetails.prepend($('mediaLoad'),$('mediaFail'),$('originalAler
 const EDGEONE_DOMESTIC=location.hostname==='kira.casto.top'||location.hostname.endsWith('.edgeone.dev');
 function warmRegionalMediaOrigins(){
  const origins=EDGEONE_DOMESTIC
-  ? ['https://upload-bbs.miyoushe.com','https://i0.hdslb.com','https://i1.hdslb.com','https://i2.hdslb.com']
-  : ['https://i.pixiv.re','https://cos.booru.nl','https://cdn.nekosia.cat','https://cdn.e-shuushuu.net'];
+  ? ['https://upload-bbs.miyoushe.com','https://konachan.net','https://assets.yande.re','https://cdn.e-shuushuu.net','https://wsrv.nl']
+  : ['https://konachan.net','https://assets.yande.re','https://cdn.e-shuushuu.net','https://wsrv.nl'];
  for(const href of origins){
   const dns=document.createElement('link');dns.rel='dns-prefetch';dns.href=href;document.head.appendChild(dns);
   const pre=document.createElement('link');pre.rel='preconnect';pre.href=href;pre.crossOrigin='anonymous';document.head.appendChild(pre);
@@ -22,7 +22,23 @@ const ico=name=>`<svg aria-hidden="true"><use href="#ico-${name}"></use></svg>`;
 /* KIRA! JUMP V6 — real Pixiv metadata snapshot; artwork remains owned by creators. */
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const imageReferrerPolicy=url=>{try{return new URL(url).hostname==='cos.booru.nl'?'strict-origin-when-cross-origin':'no-referrer'}catch{return 'no-referrer'}};
-const allowedImage=u=>{try{const v=new URL(u);return v.protocol==='https:'&&['i.pixiv.re','i.pixiv.nl','i.pixiv.cat','i.pximg.net','i-cf.pximg.net','i.pixiv.moe','cdn.donmai.us','konachan.net','konachan.com','safebooru.org','upload-bbs.miyoushe.com','th.wallhaven.cc','cdn.nekosia.cat','yande.re','files.yande.re','assets.yande.re','cos.booru.nl','cdn.e-shuushuu.net','i0.hdslb.com','i1.hdslb.com','i2.hdslb.com','static.zerochan.net','s1.zerochan.net','s2.zerochan.net','s3.zerochan.net','w.wallhaven.cc'].includes(v.hostname)?v.href:null}catch{return null}};
+const allowedImage=u=>{try{const v=new URL(u);return v.protocol==='https:'&&['i.pixiv.re','i.pixiv.nl','i.pixiv.cat','i.pximg.net','i-cf.pximg.net','i.pixiv.moe','cdn.donmai.us','konachan.net','konachan.com','safebooru.org','upload-bbs.miyoushe.com','th.wallhaven.cc','cdn.nekosia.cat','wsrv.nl','images.weserv.nl','yande.re','files.yande.re','assets.yande.re','cos.booru.nl','cdn.e-shuushuu.net','i0.hdslb.com','i1.hdslb.com','i2.hdslb.com','static.zerochan.net','s1.zerochan.net','s2.zerochan.net','s3.zerochan.net','w.wallhaven.cc'].includes(v.hostname)?v.href:null}catch{return null}};
+const displayImage=(source,url,kind='thumb')=>{
+ if(!url)return null;
+ try{
+  const u=new URL(url);
+  if(u.hostname==='upload-bbs.miyoushe.com'){
+   const process=kind==='preview'?'image/resize,w_1280/format,webp/quality,q_82':'image/resize,w_480/format,webp/quality,q_75';
+   u.searchParams.set('x-oss-process',process);return u.href;
+  }
+  if(source==='nekosia'||u.hostname==='cdn.nekosia.cat'){
+   if(u.hostname==='wsrv.nl'||u.hostname==='images.weserv.nl')return u.href;
+   const w=kind==='preview'?1280:480,q=kind==='preview'?82:75;
+   return 'https://wsrv.nl/?url='+encodeURIComponent(u.href)+'&w='+w+'&output=webp&q='+q;
+  }
+  return u.href;
+ }catch{return null}
+};
 /* These are ONLY explicit-user-request original CDN images. Never include them
  * in thumb/sample preloads, decoded warmImages or SW CacheStorage. */
 function validatedOriginal(raw,source){
@@ -110,11 +126,12 @@ function normalizeSnapshot(snapshot){
     if(!a||!Number.isSafeInteger(a.pid)||!Array.isArray(a.tags))continue;
     const tags=a.tags.filter(t=>typeof t==='string').map(t=>t.replace(/_/g,' ').slice(0,72));
     if(tags.some(t=>DENY_TAG.test(t)))continue;
-    const card=allowedImage(a.thumbnail_url);
+    const displaySource=a.source||group;
+  const card=allowedImage(displayImage(displaySource,a.thumbnail_url,'thumb'));
     // Existing D1 records may still hold the invalid API sample path.
     // Normalize before thumbnail/HD scheduling so broken requests never enter
     // the warmup queue. This changes no original/source URLs.
-    const preview=cosbooru?(allowedImage(a.preview_url)||card):allowedImage(a.preview_url);
+    const preview=cosbooru?(allowedImage(displayImage(displaySource,a.preview_url,'preview'))||card):allowedImage(displayImage(displaySource,a.preview_url,'preview'));
     if(!card||!preview)continue;
     const id=biliCreator?960000000000000+a.pid:biliOpus?970000000000000+a.pid*32+Number(a.page||0):zerochan?950000000000000+a.pid:safeDonmai?610000000000000+a.pid:booru?600000000000000+a.pid:konachan?700000000000000+a.pid:yande?800000000000000+a.pid:safebooru?900000000000000+a.pid:wallhaven?920000000000000+a.pid:eshu?930000000000000+a.pid:cosbooru?940000000000000+a.pid:nekosia?400000000000000+a.pid:miyoushe?(miyousheCos?510000000000000:500000000000000)+a.pid*16+Number(a.page||0):a.pid*1000+Number(a.page||0);
     if(!Number.isSafeInteger(id)||id<=0)continue;
@@ -2257,8 +2274,8 @@ async function loadDatabaseSource(source,{pages=2,restart=false,appendOnly=false
      const cnPreview=EDGEONE_DOMESTIC?allowedImage(image.cn_preview_url):null;
      records.push({source,pid,source_post_id:String(work.source_post_id),page:image.image_index,title:work.title||'',
       author:work.author||'',artist_verified:false,tags:Array.isArray(work.tags)?work.tags:[],
-      width:image.width,height:image.height,thumbnail_url:cnThumb||image.thumbnail_url,
-      preview_url:cnPreview||image.preview_url,original_url:image.original_url||null,source_url:work.canonical_url,
+      width:image.width,height:image.height,thumbnail_url:displayImage(source,cnThumb||image.thumbnail_url,'thumb'),
+      preview_url:displayImage(source,cnPreview||image.preview_url,'preview'),original_url:image.original_url||null,source_url:work.canonical_url,
       pixiv_url:work.canonical_url,r18:false});
     }
    }
