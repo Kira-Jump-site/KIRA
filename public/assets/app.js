@@ -1765,14 +1765,14 @@ let prevCols=innerWidth<=650?2:innerWidth<=850?3:4;window.addEventListener('resi
 
 /* Per-visitor live discovery; the bundled catalog is only a fallback / Pixiv choice.
    No original image data or server-side image storage is created by these calls. */
-const SOURCE_PAGES={zerochan:100,safedonmai:75,e_shuushuu:40,konachan:250,safebooru:120,miyoushe_cos:16,wallhaven:30,nekosia:120,pixiv_yuki:30,cosbooru:100};
+const SOURCE_PAGES={zerochan:100,safedonmai:75,e_shuushuu:40,konachan:250,yande:120,safebooru:120,miyoushe_cos:16,miyoushe_art:16,wallhaven:30,nekosia:120,pixiv_yuki:30,cosbooru:100};
 // One D1 catalogue, two access profiles: EdgeOne prioritizes China-friendly
 // sources while Cloudflare prioritizes overseas sources. Users can still
 // select any individual source; this only changes the automatic home feed.
 const DISCOVERY_PROVIDERS=EDGEONE_DOMESTIC
- ? ['miyoushe_cos','konachan']
- : ['konachan','safebooru','nekosia','e_shuushuu','pixiv_yuki','cosbooru'];
-const ALL_LIVE_PROVIDERS=['konachan','safebooru','safedonmai','zerochan','miyoushe_cos','wallhaven','nekosia','pixiv_yuki','cosbooru','e_shuushuu'];
+ ? ['miyoushe_cos','miyoushe_art','konachan','yande','nekosia','e_shuushuu']
+ : ['konachan','yande','nekosia','e_shuushuu','miyoushe_cos','miyoushe_art'];
+const ALL_LIVE_PROVIDERS=['konachan','yande','safebooru','safedonmai','zerochan','miyoushe_cos','miyoushe_art','wallhaven','nekosia','pixiv_yuki','cosbooru','e_shuushuu'];
 const HOME_FEED_SOURCES=new Set(EDGEONE_DOMESTIC?[...DISCOVERY_PROVIDERS,'bilibili_opus']:DISCOVERY_PROVIDERS);
 renderRanks();draw();
 function currentDiscoveryProviders(){

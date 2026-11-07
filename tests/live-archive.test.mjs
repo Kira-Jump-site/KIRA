@@ -14,7 +14,8 @@ class Store{
  }
 }
 const work=(id,visibility='public')=>({source:'wallhaven',source_post_id:String(id),
- visibility,rating:'safe',indexed_at:100,images:[{image_index:0,thumbnail_url:'https://w.wallhaven.cc/a.jpg'}]});
+ visibility,rating:'safe',review_policy_version:1,review_status:'approved',review_decision:{action:'approve'},
+ media_status:'verified',indexed_at:100,images:[{image_index:0,thumbnail_url:'https://w.wallhaven.cc/a.jpg',media_status:'verified'}]});
 test('archive retrieves older-than-hot items with bounded reads and stable cursor',async()=>{
  const s=new Store(),prefix='catalog/v2/';
  const hot=Array.from({length:240},(_,i)=>work('hot'+i));

@@ -22,7 +22,7 @@ test('page of works reads one revision index',async()=>{
  let count=0;
  const store={
   async list({prefix}){if(prefix.startsWith('catalog/v2/events/')){count++;return {blobs:[]}}return {blobs:entries,cursor:null}},
-  async get(key){return {work:{source:'wallhaven',source_post_id:key.split('/').pop().replace('.json',''),visibility:'pending',quality_admission:{eligible:true}}}}
+  async get(key){return {work:{source:'wallhaven',source_post_id:key.split('/').pop().replace('.json',''),visibility:'pending',media_status:'verified',quality_admission:{eligible:true},images:[{image_index:0,media_status:'verified'}]}}}
  };
  const result=await listQualityQueue(store,{source:'wallhaven',limit:100});
  assert.equal(result.works.length,3);assert.equal(count,1);

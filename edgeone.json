@@ -6,43 +6,43 @@
   },
   "schedules": [
     {
-      "name": "kira-refill-safebooru",
+      "name": "kira-refill-konachan",
       "cron": "13 0 * * *",
       "timezone": "Asia/Shanghai",
       "path": "/api/cron/replenish",
       "method": "POST",
       "payload": {
-        "source": "safebooru"
+        "source": "konachan"
       }
     },
     {
-      "name": "kira-refill-safedonmai",
+      "name": "kira-refill-yande",
       "cron": "13 2 * * *",
       "timezone": "Asia/Shanghai",
       "path": "/api/cron/replenish",
       "method": "POST",
       "payload": {
-        "source": "safedonmai"
+        "source": "yande"
       }
     },
     {
-      "name": "kira-refill-cosbooru",
+      "name": "kira-refill-miyoushe_cos",
       "cron": "13 4 * * *",
       "timezone": "Asia/Shanghai",
       "path": "/api/cron/replenish",
       "method": "POST",
       "payload": {
-        "source": "cosbooru"
+        "source": "miyoushe_cos"
       }
     },
     {
-      "name": "kira-refill-konachan",
+      "name": "kira-refill-miyoushe_art",
       "cron": "13 6 * * *",
       "timezone": "Asia/Shanghai",
       "path": "/api/cron/replenish",
       "method": "POST",
       "payload": {
-        "source": "konachan"
+        "source": "miyoushe_art"
       }
     },
     {
@@ -56,73 +56,13 @@
       }
     },
     {
-      "name": "kira-refill-e-shuushuu",
+      "name": "kira-refill-e_shuushuu",
       "cron": "13 10 * * *",
       "timezone": "Asia/Shanghai",
       "path": "/api/cron/replenish",
       "method": "POST",
       "payload": {
         "source": "e_shuushuu"
-      }
-    },
-    {
-      "name": "kira-refill-pixiv-yuki",
-      "cron": "13 12 * * *",
-      "timezone": "Asia/Shanghai",
-      "path": "/api/cron/replenish",
-      "method": "POST",
-      "payload": {
-        "source": "pixiv_yuki"
-      }
-    },
-    {
-      "name": "kira-refill-pixiv",
-      "cron": "13 14 * * *",
-      "timezone": "Asia/Shanghai",
-      "path": "/api/cron/replenish",
-      "method": "POST",
-      "payload": {
-        "source": "pixiv"
-      }
-    },
-    {
-      "name": "kira-refill-miyoushe-cos",
-      "cron": "13 16 * * *",
-      "timezone": "Asia/Shanghai",
-      "path": "/api/cron/replenish",
-      "method": "POST",
-      "payload": {
-        "source": "miyoushe_cos"
-      }
-    },
-    {
-      "name": "kira-refill-wallhaven",
-      "cron": "13 18 * * *",
-      "timezone": "Asia/Shanghai",
-      "path": "/api/cron/replenish",
-      "method": "POST",
-      "payload": {
-        "source": "wallhaven"
-      }
-    },
-    {
-      "name": "kira-refill-bilibili-opus",
-      "cron": "13 20 * * *",
-      "timezone": "Asia/Shanghai",
-      "path": "/api/cron/replenish",
-      "method": "POST",
-      "payload": {
-        "source": "bilibili_opus"
-      }
-    },
-    {
-      "name": "kira-refill-zerochan",
-      "cron": "13 22 * * *",
-      "timezone": "Asia/Shanghai",
-      "path": "/api/cron/replenish",
-      "method": "POST",
-      "payload": {
-        "source": "zerochan"
       }
     }
   ],

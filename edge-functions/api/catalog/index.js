@@ -1,6 +1,7 @@
 import {getStore} from '@edgeone/pages-blob';
 import {handleCatalog,json} from '../../../lib/catalog.mjs';
 import {queryBlobCatalog,getCatalogOverlay} from '../../../lib/blob-catalog.mjs';
+import {isApprovedPublic} from '../../../lib/review-state-v9.mjs';
 
 async function legacy(request,store){
  return handleCatalog(request,async source=>{
@@ -12,7 +13,7 @@ async function legacy(request,store){
    const overlay=await getCatalogOverlay(store,source);
    const byId=new Map(old.map(w=>[w.source_post_id,w]));
    for(const [id,w] of overlay){
-    if(w.visibility==='public'&&['safe','general'].includes(w.rating))byId.set(id,w);
+    if(isApprovedPublic(w))byId.set(id,w);
     else byId.delete(id);
    }
    return [...byId.values()];

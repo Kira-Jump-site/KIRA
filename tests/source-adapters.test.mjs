@@ -12,8 +12,11 @@ class FakeBlob{
  async list({prefix}){return {blobs:[...this.data.keys()].filter(k=>k.startsWith(prefix)).map(key=>({key}))}}
 }
 function response(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}})}
-const safePost=id=>({id,preview_url:'https://safebooru.org/thumbnails/a.jpg',sample_url:'https://safebooru.org/samples/a.jpg',rating:'s',tags:'miku blue_hair',width:1200,height:1900});
+const safePost=id=>({id,preview_url:'https://safebooru.org/thumbnails/a.jpg',sample_url:'https://safebooru.org/samples/a.jpg',rating:'s',tags:'miku blue_hair',width:1200,height:1900,score:12});
 const safefetch=async()=>response([safePost(101),{...safePost(102),rating:'e'}]);
+// A successful image HEAD is the only media proof unit tests can supply without
+// network access. Ingestion requires that proof before storing a work.
+const mediaOk=async()=>new Response(null,{status:200,headers:{'Content-Type':'image/jpeg'}});
 test('safebooru parses and filters unsafe records',async()=>{
  const result=await discoverSource('safebooru',{fetcher:safefetch});
  assert.equal(result.works.length,1);assert.equal(result.works[0].source_post_id,'101');
@@ -34,7 +37,7 @@ test('pixiv_yuki random recommends without claiming tag search',async()=>{
  const fetcher=async()=>response(data);
  const d=await discoverSource('pixiv_yuki',{fetcher});
  assert.equal(d.works.length,1);assert.equal(d.works[0].visibility,'pending');
- await assert.rejects(discoverSource('pixiv_yuki',{tag:'hatsune_miku',fetcher}),/only_pixiv_id_lookup_supported/);
+ await assert.rejects(discoverSource('pixiv_yuki',{tag:'hatsune_miku',fetcher}),/source_tag_not_supported_id_only/);
 });
 test('miyoushe parses multiple pictures under one work',async()=>{
  const doc={retcode:0,data:{list:[{post:{post_id:'77333345',subject:'cosplay 正片',created_at:1787000000,images:['https://upload-bbs.miyoushe.com/a.jpg','https://upload-bbs.miyoushe.com/b.jpg']},user:{nickname:'coser'}}]}};
@@ -55,24 +58,30 @@ test('E-Shuushuu parses real site card and full-image page',async()=>{
  const detail='<title>anime image</title><img class="full-image svelte-test" src="https://cdn.e-shuushuu.net/large/x.jpg" width="4000" height="4000"/>rating:0,image_id:1121120';
  const fetcher=async u=>new Response(String(u).includes('/images/1121120')?detail:list);
  const d=await discoverSource('e_shuushuu',{fetcher});
- assert.equal(d.works.length,1);assert.equal(d.works[0].rating,'safe');
+ assert.equal(d.works.length,1);
+ // e-shuushuu's rating field is a 0-10 quality score, not a safety class.
+ assert.equal(d.works[0].rating,'unknown');
  assert.equal(d.works[0].images[0].preview_url,'https://cdn.e-shuushuu.net/large/x.jpg');
 });
 test('EdgeOne ingestion persists once and shares a source cooldown',async()=>{
  const s=new FakeBlob();
- const one=await ingestSource(s,'safebooru',{fetcher:safefetch,now:1792238000000});
- assert.equal(one.new_posts,1);assert.equal(one.published,1);
+ const one=await ingestSource(s,'safebooru',{fetcher:safefetch,mediaFetcher:mediaOk,now:1792238000000});
+ // New discoveries stay private until an administrator approves them.
+ assert.equal(one.new_posts,1);assert.equal(one.published,0);assert.equal(one.pending_review,1);
  assert.equal((await getLiveRecent(s,'safebooru')).length,1);
- const two=await ingestSource(s,'safebooru',{fetcher:safefetch,now:1792238000001});
+ const two=await ingestSource(s,'safebooru',{fetcher:safefetch,mediaFetcher:mediaOk,now:1792238000001});
  assert.equal(two.skipped,'cooldown');assert.equal(two.new_posts,0);
  const reread=await s.get('catalog/v2/live/items/safebooru/101.json',{type:'json'});
  assert.equal(reread.work.source_post_id,'101');
+ assert.equal(reread.work.visibility,'pending');
 });
-test('ingestion deduplicates already archived source identities',async()=>{
+test('ingestion deduplicates identities already in the Blob live index',async()=>{
  const s=new FakeBlob();
- await s.setJSON('catalog/v2/lookup/safebooru.json',{'101':0});
- const r=await ingestSource(s,'safebooru',{fetcher:safefetch,now:1792238300000});
- assert.equal(r.new_posts,0);assert.equal((await getLiveRecent(s,'safebooru')).length,0);
+ // The current dedup source is the live recent index; the historical static
+ // lookup is covered by the legacy-identity test below.
+ await s.setJSON('catalog/v2/live/recent/safebooru.json',{schema:2,source:'safebooru',works:[{source_post_id:'101'}]});
+ const r=await ingestSource(s,'safebooru',{fetcher:safefetch,mediaFetcher:mediaOk,now:1792238300000});
+ assert.equal(r.new_posts,0);assert.equal((await getLiveRecent(s,'safebooru')).length,1);
 });
 
 test('miyoushe cursor pagination uses last_id rather than ineffective page param',async()=>{
@@ -85,18 +94,24 @@ test('miyoushe cursor pagination uses last_id rather than ineffective page param
 });
 
 test('e_shuushuu refuses ignored tag search instead of repeating the same images',async()=>{
- await assert.rejects(discoverSource('e_shuushuu',{tag:'hatsune_miku',fetcher:async()=>response([])}),/e_shuushuu_tag_search_not_verified/);
+ await assert.rejects(discoverSource('e_shuushuu',{tag:'hatsune_miku',fetcher:async()=>response([])}),/source_tag_not_supported_tag_search_not_verified/);
 });
 
 test('refresh rotates pages and preserves source work identities',async()=>{
- const s=new FakeBlob(),seen=[];
+ const s=new FakeBlob(),seen=[],urls=[];
  const upstream=async url=>{
-  const u=new URL(url);const page=Number(u.searchParams.get('pid'))+1;seen.push(page);
+  const u=new URL(url);const page=Number(u.searchParams.get('pid'))+1;seen.push(page);urls.push(String(url));
   return response([safePost(100+page)]);
  };
- const one=await ingestSource(s,'safebooru',{fetcher:upstream,now:1792238000000});
- const two=await ingestSource(s,'safebooru',{fetcher:upstream,now:1792238310000});
- assert.deepEqual(seen,[1,2]);assert.equal(one.new_posts,1);assert.equal(two.new_posts,1);
+ // The schedule is 2/4 newest, 1/4 popular, 1/4 alternate. Page rotation must
+ // still reach the next numeric page instead of refetching page one forever.
+ const times=[1792238000000,1792238310000,1792238620000,1792238930000];
+ const results=[];
+ for(const now of times)results.push(await ingestSource(s,'safebooru',{fetcher:upstream,mediaFetcher:mediaOk,now}));
+ assert.deepEqual([...new Set(seen)].sort(),[1,2]);
+ assert.ok(urls.some(u=>!u.includes('sort')),'expected at least one newest lane');
+ assert.ok(urls.some(u=>u.includes('sort%3Ascore%3Adesc')),'expected at least one popular lane');
+ assert.equal(results.reduce((n,r)=>n+(r.new_posts||0),0),2);
  assert.deepEqual((await getLiveRecent(s,'safebooru')).map(w=>w.source_post_id).sort(),['101','102']);
 });
 
@@ -108,11 +123,14 @@ test('Wallhaven SFW anime is accepted, non-anime and NSFW rejected',async()=>{
   {id:'oops',purity:'nsfw',category:'anime',path:'https://w.wallhaven.cc/test.jpg',thumbs:{large:'https://th.wallhaven.cc/test.jpg'}}
  ]};
  let requested;
- const r=await discoverSource('wallhaven',{fetcher:async url=>{requested=new URL(url);return response(data)}});
+ const urls=[];
+ const r=await discoverSource('wallhaven',{fetcher:async url=>{urls.push(String(url));if(String(url).includes('/api/v1/search'))requested=new URL(url);return response(data)}});
  assert.equal(r.works.length,1);assert.equal(r.works[0].source_post_id,'e8vm9o');
  assert.equal(r.works[0].rating,'safe');
+ // The search call carries the safety filters; a detail call follows per work.
  assert.equal(requested.searchParams.get('purity'),'100');
  assert.equal(requested.searchParams.get('categories'),'010');
+ assert.ok(urls.some(u=>u.includes('/api/v1/w/e8vm9o')),'expected an official detail lookup');
 });
 
 test('media probe rejects SSRF origins and accepts real image MIME',async()=>{
@@ -130,15 +148,15 @@ test('failed thumbnail probe prevents an otherwise safe work being published',as
  const store=new FakeBlob(),date=1792238000000;
  const report=await ingestSource(store,'safebooru',{fetcher:async()=>response([safePost(765)]),now:date,
   mediaFetcher:async()=>new Response('<html/>',{status:200,headers:{'Content-Type':'text/html'}})});
- const saved=await getLiveRecent(store,'safebooru');
- assert.equal(report.media_failed,2);assert.equal(report.published,0);
- assert.equal(saved[0].visibility,'pending');assert.equal(saved[0].media_status,'sample_failed');
+ // A work whose media never proved to be an image is not stored at all.
+ assert.equal(report.media_failed,2);assert.equal(report.published,0);assert.equal(report.new_posts,0);
+ assert.equal((await getLiveRecent(store,'safebooru')).length,0);
 });
 
 test('preparsed discovery persists without a second upstream fetch',async()=>{
  const db=new FakeBlob();let calls=0;
  const fetched=await discoverSource('safebooru',{fetcher:async()=>{calls++;return response([safePost(321)])}});
- const result=await ingestSource(db,'safebooru',{preparsed:fetched,fetcher:async()=>{calls++;throw Error('unexpected duplicate fetch')},now:1792238000000});
+ const result=await ingestSource(db,'safebooru',{preparsed:fetched,mediaFetcher:mediaOk,fetcher:async()=>{calls++;throw Error('unexpected duplicate fetch')},now:1792238000000});
  assert.equal(calls,1);
  assert.equal(result.new_posts,1);
  assert.equal((await getLiveRecent(db,'safebooru'))[0].source_post_id,'321');

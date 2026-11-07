@@ -13,7 +13,8 @@ class BlobStore{
  async list({prefix}){return {blobs:[...this.data.keys()].filter(k=>k.startsWith(prefix)).map(key=>({key}))}}
 }
 const item=id=>({id,preview_url:'https://safebooru.org/thumbnails/x.jpg',
- sample_url:'https://safebooru.org/samples/x.jpg',rating:'s',tags:'anime',width:1000,height:800});
+ sample_url:'https://safebooru.org/samples/x.jpg',rating:'s',tags:'anime',width:1000,height:800,score:20});
+const mediaOk=async()=>new Response(null,{status:200,headers:{'Content-Type':'image/jpeg'}});
 test('daily schedule covers every enabled source exactly once',async()=>{
  const config=JSON.parse(await readFile('edgeone.json','utf8'));
  assert.equal(config.schedules.length,REPLENISH_SOURCES.length);
@@ -24,8 +25,8 @@ test('low stock replenishment writes safe work once and throttles shared visitor
  const store=new BlobStore();
  let count=0;
  const fetcher=async()=>{count++;return new Response(JSON.stringify([item(99888881)]),{status:200})};
- const a=await replenishSource(store,'safebooru',{now:1792251000000,reason:'low_stock',remaining:10,fetcher,maxPages:3});
- assert.equal(a.ok,true);assert.equal(a.added,1);assert.equal(a.published,1);
+ const a=await replenishSource(store,'safebooru',{now:1792251000000,reason:'low_stock',remaining:10,fetcher,mediaFetcher:mediaOk,maxPages:3});
+ assert.equal(a.ok,true);assert.equal(a.added,1);assert.equal(a.published,0);assert.equal(a.pending,1);
  assert.equal((await store.get('catalog/v2/live/recent/safebooru.json')).works.length,1);
  const before=count;
  const b=await replenishSource(store,'safebooru',{now:1792251001000,reason:'low_stock',remaining:1,fetcher});

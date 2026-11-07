@@ -4,6 +4,7 @@ const $=id=>document.getElementById(id),grid=$('grid'),dialog=$('detail');
 const state={items:[],selected:new Set(),cursors:[''],page:0,nextCursor:null,busy:false,dirty:false,opened:null,image:0};
 function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined&&text!==null)n.textContent=String(text);if(cls)n.className=cls;return n}
 function safeURL(str){try{const u=new URL(str);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null}catch{return null}}
+const refPolicy=url=>{try{return new URL(url).hostname==='cos.booru.nl'?'strict-origin-when-cross-origin':'no-referrer'}catch{return 'no-referrer'}};
 async function api(path,method='GET',body=null){const response=await fetch(path,{method,cache:'no-store',headers:{'X-KIRA-Review-Test':'1',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok)throw Error(data.error||`HTTP ${response.status}`);return data}
 function status(t){$('status').textContent=t}
 function identity(w){return w.source+'|'+w.source_post_id}
@@ -15,7 +16,7 @@ function render(){grid.replaceChildren();$('empty').hidden=state.items.length>0;
  for(const w of state.items){const keep=state.selected.has(identity(w));const card=el('article',null,'card '+(keep?'selected':'removed'));card.dataset.key=identity(w);
   const imgs=imageList(w),thumb=safeURL(imgs[0]?.thumbnail_url);
   const imageButton=el('button',null,'thumb');imageButton.type='button';imageButton.title='打开高清预览（仅点击后加载）';
-  if(thumb){const img=el('img');img.src=thumb;img.alt='作品缩略图';img.loading='lazy';img.decoding='async';img.referrerPolicy='no-referrer';img.fetchPriority='low';imageButton.append(img)}
+  if(thumb){const img=el('img');img.src=thumb;img.alt='作品缩略图';img.loading='lazy';img.decoding='async';img.referrerPolicy=refPolicy(thumb);img.fetchPriority='low';imageButton.append(img)}
   else imageButton.append(el('span','无缩略图','missing'));
   if(imgs.length>1)imageButton.append(el('em',`${imgs.length} 张`));imageButton.onclick=()=>openDetail(w);card.append(imageButton);
   const bar=el('div',null,'meta'),label=el('label');const checkbox=el('input');checkbox.type='checkbox';checkbox.checked=keep;checkbox.setAttribute('aria-label',`保留 ${w.source_post_id}`);checkbox.onchange=()=>toggleWork(w,checkbox.checked);
@@ -30,10 +31,10 @@ function setBusy(flag){state.busy=flag;for(const id of ['load','commit','rejectA
 function confirmLeave(){return !state.dirty||confirm('本页存在尚未提交的选择，确认丢弃并翻页？')}
 async function load(page=0){if(state.busy)return;if(page!==state.page&&!confirmLeave())return;setBusy(true);
  try{const cursor=state.cursors[page]||'',size=+$('pageSize').value,query=new URLSearchParams({source:$('source').value,limit:String(size)});if(cursor)query.set('cursor',cursor);
-  const out=await api('/api/catalog/admin/queue?'+query);state.items=out.works||[];state.selected=new Set(state.items.map(identity));state.page=page;state.nextCursor=out.next_cursor||null;state.dirty=false;
+  const out=await api('/api/catalog/review-test/queue?'+query);state.items=out.works||[];state.selected=new Set(state.items.map(identity));state.page=page;state.nextCursor=out.next_cursor||null;state.dirty=false;
   if(state.nextCursor)state.cursors[page+1]=state.nextCursor;else state.cursors.length=page+1;
-  render();status(`扫描 ${out.scanned} 条索引，符合质量门槛且等待管理员审核 ${state.items.length} 组。每页只加载首张缩略图。`);
- }catch(e){status('读取失败：'+e.message)}finally{setBusy(false)}}
+  render();void sourceDiagnostics();status(`扫描 ${out.scanned} 条索引，符合质量门槛且等待管理员审核 ${state.items.length} 组。每页只加载首张缩略图。`);
+ }catch(e){state.items=[];state.selected.clear();render();$('empty').hidden=true;status('读取失败：'+e.message+'。这不是队列为空。请查看图源诊断。')}finally{setBusy(false)}}
 function openDetail(w){state.opened=w;state.image=0;$('detailTitle').textContent=(w.title||w.raw_title||'未命名')+' · '+w.source+' #'+w.source_post_id;
  $('rating').value=['safe','general'].includes(w.rating)?w.rating:'';
  const report=[`原始标签：${(w.raw_tags||[]).slice(0,60).join('、')||'无'}`,`标准标签：${(w.normalized_tag_ids||[]).slice(0,60).join('、')||'无'}`,`质量证据：${w.quality_admission?.rule||'待确认'}`,`作者：${w.source_artist_name||'未知'}；上传者：${w.uploader_name||'未知'}`];$('details').textContent=report.join('\n');$('details').style.whiteSpace='pre-wrap';
@@ -52,7 +53,7 @@ $('selectAll').onclick=()=>{state.selected=new Set(state.items.map(identity));st
 $('selectNone').onclick=()=>{state.selected.clear();state.dirty=true;render()};
 $('invert').onclick=()=>{state.selected=new Set(state.items.filter(w=>!state.selected.has(identity(w))).map(identity));state.dirty=true;render()};
 async function runBatch(items,action){const results=[];for(let i=0;i<items.length;i+=20){const chunk=items.slice(i,i+20).map(w=>({source:w.source,source_post_id:w.source_post_id,expected_revision:w.revision||'live',...(action==='approve'?{rating:w.rating}:{reason:'管理员筛选剔除'})}));
- const out=await api('/api/catalog/admin/bulk-review','POST',{action,items:chunk});results.push(...out.results);status(`正在处理 ${action==='approve'?'批准':'剔除'}：${Math.min(i+20,items.length)}/${items.length}，成功 ${results.filter(x=>x.ok).length}`);
+ const out=await api('/api/catalog/review-test/bulk-review','POST',{action,items:chunk});results.push(...out.results);status(`正在处理 ${action==='approve'?'批准':'剔除'}：${Math.min(i+20,items.length)}/${items.length}，成功 ${results.filter(x=>x.ok).length}`);
  }return results}
 async function commit({onlyReject=false}={}){if(state.busy||!state.items.length)return;
  const keep=onlyReject?[]:state.items.filter(w=>state.selected.has(identity(w))),remove=onlyReject?state.items:state.items.filter(w=>!state.selected.has(identity(w)));
@@ -70,13 +71,13 @@ async function commit({onlyReject=false}={}){if(state.busy||!state.items.length)
 $('commit').onclick=()=>commit();$('rejectAll').onclick=()=>commit({onlyReject:true});
 async function one(action){const w=state.opened;if(!w||state.busy)return;const keep=action==='approve';if(keep&&!['safe','general'].includes(w.rating))return status('先为这组作品确定安全评级');
  if(!confirm(`${keep?'批准':'剔除'}作品 ${w.source_post_id}？`))return;setBusy(true);try{
-  const out=await api('/api/catalog/admin/review','POST',{source:w.source,source_post_id:w.source_post_id,expected_revision:w.revision||'live',action,rating:w.rating,reason:keep?'':'管理员剔除'});
+  const out=await api('/api/catalog/review-test/review','POST',{source:w.source,source_post_id:w.source_post_id,expected_revision:w.revision||'live',action,rating:w.rating,reason:keep?'':'管理员剔除'});
   state.items=state.items.filter(v=>identity(v)!==identity(w));state.selected.delete(identity(w));closeDetail();render();status('已处理：'+out.action+' #'+w.source_post_id);
  }catch(e){status('单件操作失败：'+e.message)}finally{setBusy(false)}}
 $('singleApprove').onclick=()=>one('approve');$('singleReject').onclick=()=>one('reject');
 $('editTags').onclick=async()=>{const w=state.opened;if(!w)return;
  const raw=prompt('输入已确认的 KIRA 标准标签 ID（英文逗号分隔，必须为知识库现有 ID）',(w.admin_confirmed_tag_ids||[]).join(','));if(raw===null)return;
- try{const ids=raw.split(',').map(x=>x.trim()).filter(Boolean);const out=await api('/api/catalog/admin/review','POST',{
+ try{const ids=raw.split(',').map(x=>x.trim()).filter(Boolean);const out=await api('/api/catalog/review-test/review','POST',{
   source:w.source,source_post_id:w.source_post_id,expected_revision:w.revision||'live',action:'retag',canonical_tag_ids:ids});
   w.admin_confirmed_tag_ids=ids;w.normalized_tag_ids=ids;w.revision=out.revision;render();status('标签人工覆盖已保存，修订号已更新');
  }catch(e){status('修改标签失败：'+e.message)}};
@@ -95,9 +96,17 @@ const reindexCursors=new Map();$('reindex').onclick=async()=>{const source=$('so
 
 $('load').onclick=()=>{state.cursors=[''];load(0)};$('prev').onclick=()=>load(Math.max(0,state.page-1));$('next').onclick=()=>load(state.page+1);
 $('pageSize').onchange=()=>{state.cursors=[''];state.page=0;state.nextCursor=null;state.items=[];state.selected.clear();render()};
-$('source').onchange=()=>{state.cursors=[''];state.page=0;state.nextCursor=null;state.items=[];state.selected.clear();render()};
+let activeSource=$('source').value,sourceGen=0;
+$('source').onchange=()=>{const next=$('source').value;if(state.dirty&&!confirm('本页存在尚未提交的选择，切换图源会丢弃，继续？')){$('source').value=activeSource;return}
+ activeSource=next;const gen=++sourceGen;state.cursors=[''];state.page=0;state.nextCursor=null;state.items=[];state.selected.clear();state.dirty=false;render();void sourceDiagnostics();const start=()=>{if(gen!==sourceGen)return;if(state.busy){setTimeout(start,120);return}void load(0)};start()};
 $('refill').onclick=async()=>{const source=$('source').value;if(!confirm('对 '+source+' 执行额外采集？新作品将先经过高质量筛选和媒体核验，合格后进入待审队列；失败不会凑数。'))return;
  setBusy(true);try{const result=await api('/api/catalog/admin/refill','POST',{source});status(`本次新增待审 ${result.pending||0}、采集 ${result.pages||0} 页、质量失败 ${(result.skipped_invalid||0)}。不自动公开。`)}catch(e){status('补充失败：'+e.message)}finally{setBusy(false)}};
 for(const source of SOURCES){const option=el('option',source);option.value=source;$('source').append(option)}summary();
 $('refill').disabled=true;
 void load(0);
+
+async function sourceDiagnostics(){
+ try{const source=$('source').value;if(!source)return;const response=await fetch('/api/catalog/review-test/status?'+new URLSearchParams({source}),{cache:'no-store'});const out=await response.json();if(!response.ok||!out.ok)throw Error(out.error||'HTTP '+response.status);const c=out.counts||{},last=out.latest||{};$('diagnostics').textContent=[source,'最近索引 '+(c.recent||0),'待审且质量证据完整 '+(c.awaiting_review||0),'旧版未审核公开记录 '+(c.old_unreviewed_public||0),'缺媒体验证 '+(c.missing_media_evidence||0),'缺新版质量证据 '+(c.missing_quality_evidence||0),'最近采集新增 '+(last.added??'未知'),'待审 '+(last.pending??'未知'),'采集页数 '+(last.pages??'未知'),'错误 '+(last.errors||[]).join(', ')].join(' ｜ ');}
+ catch(e){$('diagnostics').textContent='图源诊断不可用：'+e.message}
+}
+void sourceDiagnostics();

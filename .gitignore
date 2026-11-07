@@ -3,5 +3,7 @@ dist/
 evidence/
 *.sql
 .env*
+.edgeone/
+.claude/
 *.log
 *.zip
