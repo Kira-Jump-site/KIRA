@@ -39,6 +39,7 @@ function validatedOriginal(raw,source){
   if(source==='e_shuushuu')return u.hostname==='cdn.e-shuushuu.net'&&/^\/(?:images|image)\//.test(path)?u.href:null;
   if(source==='cosbooru')return u.hostname==='cos.booru.nl'&&/\.(?:jpe?g|png|webp|avif)(?:$|\?)/i.test(u.href)&&!/^\/(?:posts|wiki_pages|users|login)(?:\/|$)/.test(path)?u.href:null;
   if(source==='zerochan')return ['static.zerochan.net','s1.zerochan.net','s2.zerochan.net','s3.zerochan.net'].includes(u.hostname)?u.href:null;
+  if(source==='yande')return ['yande.re','files.yande.re','assets.yande.re'].includes(u.hostname)&&/^\/(?:image|data|sample)\//.test(path)?u.href:null;
   if(source==='konachan')return ['konachan.net','konachan.com'].includes(u.hostname)&&
     /^\/(?:image|data|jpeg|images)\//.test(path)?u.href:null;
   if(source==='safebooru')return u.hostname==='safebooru.org'&&path.startsWith('/images/')?u.href:null;
@@ -51,7 +52,7 @@ function validatedOriginal(raw,source){
   return null; // Pixiv metadata snapshot cannot prove original file extension/URL.
  }catch{return null}
 }
-const SOURCE_TAGS={miku:'初音未来',genshin:'原神',girl:'少女',discover:'Pixiv',original:'原创',touhou:'东方Project',bluearchive:'蔚蓝档案',arknights:'明日方舟',fantasy:'幻想',landscape:'风景',safebooru:'Safebooru',miyoushe_art:'米游社插画',miyoushe_cos:'米游社 COS',wallhaven:'Wallhaven 动漫壁纸',nekosia:'Nekosia 创作图集',pixiv_yuki:'Pixiv 画师补充',cosbooru:'Cosbooru COS',e_shuushuu:'E-Shuushuu 插画',safedonmai:'Safebooru · Danbooru 全年龄',zerochan:'Zerochan'};
+const SOURCE_TAGS={miku:'初音未来',genshin:'原神',girl:'少女',discover:'Pixiv',original:'原创',touhou:'东方Project',bluearchive:'蔚蓝档案',arknights:'明日方舟',fantasy:'幻想',landscape:'风景',safebooru:'Safebooru',yande:'Yande.re',miyoushe_art:'米游社插画',miyoushe_cos:'米游社 COS',wallhaven:'Wallhaven 动漫壁纸',nekosia:'Nekosia 创作图集',pixiv_yuki:'Pixiv 画师补充',cosbooru:'Cosbooru COS',e_shuushuu:'E-Shuushuu 插画',safedonmai:'Safebooru · Danbooru 全年龄',zerochan:'Zerochan'};
 const DENY_TAG=/^(?:loli|shota|underage|child|children|未成年|幼女|萝莉|正太)$/i;
 const normalizeTag=t=>String(t||'').replace(/_/g,' ').trim().toLowerCase().replace(/\s+/g,' ');
 const NOISE_TAG=/^(?:1girl|1boy|2girls|solo|multiple girls|long hair|short hair|smile|looking at viewer|blush|breasts|large breasts|dress|white background|simple background|official art|illustration|original|original character|girl|girls|anime|pixiv|absurdres|highres|rating safe|rating general|artist name|copyright|image|solo focus|colored eyes|(?:black|blue|red|green|aqua|pink|purple|brown|white|blonde|silver|grey|gray) (?:hair|eyes)|(?:short|long|medium) (?:hair|sleeves)|(?:black|white|pink|blue|red) (?:dress|shirt|skirt|pantyhose|thighhighs)|hair ornament|hair ribbon|sitting|standing|from side|full body|upper body|school uniform|swimsuit|bikini|cleavage|solo focus)$/i;
@@ -106,7 +107,7 @@ function normalizeSnapshot(snapshot){
     const pixivYuki=group==='pixiv_yuki'||a?.source==='pixiv_yuki';
     const eshu=group==='e_shuushuu'||a?.source==='e_shuushuu';
     const miyoushe=miyousheArt||miyousheCos;
-    if(!a||miyousheArt||!Number.isSafeInteger(a.pid)||!Array.isArray(a.tags))continue;
+    if(!a||!Number.isSafeInteger(a.pid)||!Array.isArray(a.tags))continue;
     const tags=a.tags.filter(t=>typeof t==='string').map(t=>t.replace(/_/g,' ').slice(0,72));
     if(tags.some(t=>DENY_TAG.test(t)))continue;
     const card=allowedImage(a.thumbnail_url);
@@ -592,12 +593,13 @@ function draw(){
   document.querySelectorAll('[data-route]').forEach(b=>b.classList.toggle('on',b.dataset.route===state.route));
   document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('on',b.dataset.filter===state.filter));
   document.querySelectorAll('[data-source]').forEach(b=>b.classList.toggle('on',b.dataset.source===state.sourceFilter));
-  $('sourceDanbooru').hidden=!WORKS.some(w=>w.source==='danbooru');
-  $('sourceKonachan').hidden=false;
-  $('sourceSafebooru').hidden=false;
-  $('sourceMiyousheCos').hidden=false;
-  $('sourceWallhaven').hidden=false;
-  $('sourceYande').hidden=!WORKS.some(w=>w.source==='yande');
+  const setSourceChipHidden=(id,hidden)=>{const el=$(id);if(el)el.hidden=hidden};
+  setSourceChipHidden('sourceDanbooru',!WORKS.some(w=>w.source==='danbooru'));
+  setSourceChipHidden('sourceKonachan',false);
+  setSourceChipHidden('sourceSafebooru',false);
+  setSourceChipHidden('sourceMiyousheCos',false);
+  setSourceChipHidden('sourceWallhaven',false);
+  setSourceChipHidden('sourceYande',!WORKS.some(w=>w.source==='yande'));
   document.querySelectorAll('[data-main]').forEach(b=>b.classList.toggle('active',b.dataset.main===state.main));
   $('upload').classList.toggle('active',state.main==='收藏');
   document.querySelectorAll('[data-mobile]').forEach(b=>b.classList.toggle('on',b.dataset.mobile===(state.main==='精选'?'rank':state.main==='关注'?'follow':state.main==='收藏'?'upload':'home')));
@@ -1568,7 +1570,7 @@ $('feedFilters').addEventListener('click',e=>{const b=e.target.closest('[data-fi
  // Content type is a filter, not a separate network partition. If the user asks
  // for Cosplay and we have none yet, fetch both available COS-capable providers.
  if(b.dataset.filter==='Cosplay'&&!WORKS.some(w=>w.kind==='Cosplay'))
-  void loadLiveArtwork({force:true,onlyProviders:['miyoushe_cos','cosbooru']});
+  void loadLiveArtwork({force:true,onlyProviders:['miyoushe_cos']});
 });
 $('sourceFilters').addEventListener('click',e=>{
  const external=e.target.closest('[data-adult-external]');
@@ -1579,10 +1581,10 @@ $('sourceFilters').addEventListener('click',e=>{
   refreshOnlyIds=null;state.sourceFilter=b.dataset.source;saveCurrentSource();state.route='all';state.filter='全部';state.search='';$('search').value='';
  state.main='推荐';state.anchor=null;state.refreshNonce++;draw();
  loadDatabaseSource(b.dataset.source);
- if(['konachan','safebooru','safedonmai','zerochan','miyoushe_cos','wallhaven','nekosia','pixiv_yuki','cosbooru','e_shuushuu'].includes(b.dataset.source)){
+ if(['konachan','yande','miyoushe_cos','miyoushe_art','nekosia','e_shuushuu'].includes(b.dataset.source)){
   $('liveStatus').textContent='正在从 '+b.textContent.trim()+' 发现作品（图片由浏览器直接请求原站）…';
   loadLiveArtwork({force:true,onlyProviders:[b.dataset.source]});
- }else if(b.dataset.source==='everything')loadLiveArtwork({force:true,onlyProviders:['safebooru','konachan','nekosia','pixiv_yuki','e_shuushuu']});
+ }else if(b.dataset.source==='everything')loadLiveArtwork({force:true,onlyProviders:['konachan','yande','miyoushe_cos','miyoushe_art','nekosia','e_shuushuu']});
 });
 /* Press Enter for a direct source-tag search; typing stays local-only. */
 const SOURCE_TAG_ALIASES={
@@ -1602,8 +1604,8 @@ const remoteTagPages=new Map();
 async function searchOriginalSources(input){
  const tag=upstreamTagOf(input);
  if(!tag){$('liveStatus').textContent='暂不支持该关键词的源站搜索；仍可搜索当前站内作品的标题、作者和标签';return}
- const providers=['konachan','safebooru'].filter(p=>['all','everything',p].includes(state.sourceFilter));
- if(!providers.length){$('liveStatus').textContent='当前图源不支持上游标签查询，请切换「多源推荐」或 Konachan/Safebooru';return}
+ const providers=['konachan','yande'].filter(p=>['all','everything',p].includes(state.sourceFilter));
+ if(!providers.length){$('liveStatus').textContent='当前图源不支持上游标签查询，请切换「多源推荐」或 Konachan/Yande';return}
  const sequence=++remoteSearchSequence,choice=state.sourceFilter;
  const pageKey=providers.join(',')+'|'+tag;
  const page=((remoteTagPages.get(pageKey)||0)%12)+1;
@@ -1765,15 +1767,15 @@ let prevCols=innerWidth<=650?2:innerWidth<=850?3:4;window.addEventListener('resi
 
 /* Per-visitor live discovery; the bundled catalog is only a fallback / Pixiv choice.
    No original image data or server-side image storage is created by these calls. */
-const SOURCE_PAGES={zerochan:100,safedonmai:75,e_shuushuu:40,konachan:250,yande:120,safebooru:120,miyoushe_cos:16,miyoushe_art:16,wallhaven:30,nekosia:120,pixiv_yuki:30,cosbooru:100};
+const SOURCE_PAGES={e_shuushuu:40,konachan:250,yande:120,miyoushe_cos:16,miyoushe_art:16,nekosia:120};
 // One D1 catalogue, two access profiles: EdgeOne prioritizes China-friendly
 // sources while Cloudflare prioritizes overseas sources. Users can still
 // select any individual source; this only changes the automatic home feed.
 const DISCOVERY_PROVIDERS=EDGEONE_DOMESTIC
  ? ['miyoushe_cos','miyoushe_art','konachan','yande','nekosia','e_shuushuu']
  : ['konachan','yande','nekosia','e_shuushuu','miyoushe_cos','miyoushe_art'];
-const ALL_LIVE_PROVIDERS=['konachan','yande','safebooru','safedonmai','zerochan','miyoushe_cos','miyoushe_art','wallhaven','nekosia','pixiv_yuki','cosbooru','e_shuushuu'];
-const HOME_FEED_SOURCES=new Set(EDGEONE_DOMESTIC?[...DISCOVERY_PROVIDERS,'bilibili_opus']:DISCOVERY_PROVIDERS);
+const ALL_LIVE_PROVIDERS=['konachan','yande','miyoushe_cos','miyoushe_art','nekosia','e_shuushuu'];
+const HOME_FEED_SOURCES=new Set(DISCOVERY_PROVIDERS);
 renderRanks();draw();
 function currentDiscoveryProviders(){
  if(ALL_LIVE_PROVIDERS.includes(state.sourceFilter))return [state.sourceFilter];
@@ -1785,7 +1787,7 @@ function currentDiscoveryProviders(){
 const livePages=(()=>{try{const x=JSON.parse(localStorage.getItem('kira.discovery.pages.v2')||'{}');return x&&typeof x==='object'?x:{}}catch{return {}}})();
 // Successful pages are persisted; reservations and failed attempts stay session-local.
 const liveSessionPages=new Map(),livePageFailures=new Map(),liveSourceCursors=new Map();
-const RANDOM_DISCOVERY_PROVIDERS=new Set(['nekosia','pixiv_yuki']);
+const RANDOM_DISCOVERY_PROVIDERS=new Set(['nekosia']);
 function nextLivePage(provider,tag=''){
  const key=provider+(tag?':'+tag:'');
  const count=tag?10:(SOURCE_PAGES[provider]||120);
@@ -1838,7 +1840,7 @@ function finishLivePage(provider,tag,page,success){
 }
 
 function refreshJumpThumbnails(){
- const pool=WORKS.filter(w=>['konachan','safebooru'].includes(w.source)&&!viewHistory.includes(w.id));
+ const pool=WORKS.filter(w=>['konachan','yande'].includes(w.source)&&!viewHistory.includes(w.id));
  const selected=(pool.length>=3?pool:WORKS).slice(0,3);
  const positions=['character','color','mood'];
  positions.forEach((name,i)=>{
@@ -1851,7 +1853,7 @@ function refreshJumpThumbnails(){
 }
 function mergeWorks(incoming){
  let inserted=0;const index=new Set(WORKS.map(w=>w.id));
- for(const w of incoming){if(w.source==='miyoushe_art')continue;if(!index.has(w.id)){WORKS.push(w);index.add(w.id);inserted++}}
+ for(const w of incoming){if(!index.has(w.id)){WORKS.push(w);index.add(w.id);inserted++}}
  return inserted;
 }
 const DISCOVERY_INTEREST_TAGS={
@@ -1880,7 +1882,7 @@ async function queryLive(provider,{deep=false}={}){
   const cursorKey=provider+(tag?':'+tag:'')+':'+page;
   const cursor=liveSourceCursors.get(cursorKey);
   const url='/api/discover?source='+provider+'&page='+page+(cursor?'&cursor='+encodeURIComponent(cursor):'')+
-   (['safebooru','safedonmai','zerochan','miyoushe_cos','wallhaven','nekosia','pixiv_yuki','cosbooru','e_shuushuu'].includes(provider)?'&experimental=1':'')+(tag?'&tag='+encodeURIComponent(tag):'');
+   (['miyoushe_cos','miyoushe_art','nekosia','e_shuushuu'].includes(provider)?'&experimental=1':'')+(tag?'&tag='+encodeURIComponent(tag):'');
   try{
   const response=await fetch(url,{cache:'no-store',signal:abort.signal});
   if(!response.ok)throw Error('live_'+provider+'_'+response.status);
@@ -2104,9 +2106,7 @@ async function hydrateRealPixiv(){
  if(laterLive.length)setTimeout(()=>{
   if(!state.focus)void loadLiveArtwork({onlyProviders:laterLive,suppressDraw:false});
  },1800);
- const snapshot=fetchPublicCatalog().then(normalizeSnapshot).catch(()=>[]);
-
- const archived=await snapshot;mergeWorks(archived);
+ const archived=[];
  // Mainland first paint comes from EdgeOne's own static hot index. Do not hold
  // it behind a cross-region D1 request or a slow external image provider.
  if(EDGEONE_DOMESTIC&&archived.length&&!state.focus){
@@ -2173,13 +2173,12 @@ async function loadDatabaseOpus(){
   if(added&&!state.focus)draw();
  }catch(error){console.info('KIRA public catalog unavailable',String(error).slice(0,70))}
 }
-loadDatabaseOpus();
 /* Read the same central catalogue for any registered provider channel.
  * No browser-side image database and no per-image cross-border D1 requests.
  * If the database isn't bound, the existing live discovery adapter can still
  * serve that channel; a missing DB is never called a populated catalogue.
  */
-const DB_CHANNELS=new Set(['bilibili_opus','pixiv','konachan','safebooru','safedonmai','nekosia','e_shuushuu','pixiv_yuki','zerochan','miyoushe_cos','cosbooru','wallhaven']);
+const DB_CHANNELS=new Set(['konachan','yande','miyoushe_cos','miyoushe_art','nekosia','e_shuushuu']);
 // Bucket random seeds so hundreds of visitors can share short-lived CDN/D1 gateway cache entries.\n// 257 rotations still provide broad per-visit variety without a unique cache key per user.\nconst D1_RANDOM_SEED=1+(crypto.getRandomValues(new Uint32Array(1))[0]%257);
 const DB_FETCHES=new Map();
 const DB_CURSORS=new Map();
@@ -2298,7 +2297,7 @@ async function loadPreparedCatalog(){
  if(EDGEONE_DOMESTIC&&!preferred.includes('bilibili_opus'))preferred.unshift('bilibili_opus');
  const first=[...new Set(preferred)].slice(0,3);
  await Promise.allSettled(first.map(source=>loadDatabaseSource(source,{pages:1})));
- const archives=['bilibili_opus','pixiv','konachan','safebooru','nekosia','e_shuushuu','pixiv_yuki','miyoushe_cos','cosbooru','safedonmai','zerochan','wallhaven']
+ const archives=['konachan','yande','miyoushe_cos','miyoushe_art','nekosia','e_shuushuu']
   .filter(x=>!first.includes(x));
  if(state.sourceFilter==='all'||state.sourceFilter==='everything'){
   setTimeout(()=>{if(!state.focus)void Promise.allSettled(archives.slice(0,4).map(source=>loadDatabaseSource(source,{pages:1,appendOnly:true})))},2600);

@@ -7,3 +7,5 @@ evidence/
 .claude/
 *.log
 *.zip
+
+backups/

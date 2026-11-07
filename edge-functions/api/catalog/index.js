@@ -2,25 +2,18 @@ import {getStore} from '@edgeone/pages-blob';
 import {handleCatalog,json} from '../../../lib/catalog.mjs';
 import {queryBlobCatalog,getCatalogOverlay} from '../../../lib/blob-catalog.mjs';
 import {isApprovedPublic} from '../../../lib/review-state-v9.mjs';
+import {readSnapshot} from '../../../lib/snapshot-catalog.mjs';
 
 async function legacy(request,store){
  return handleCatalog(request,async source=>{
-  const r=await fetch(new URL('/assets/catalog-api/'+source+'.json',request.url),{cache:'default'});
-  if(!r.ok&&r.status!==404)throw Error('catalog_http_'+r.status);
-  const old=r.status===404?[]:await r.json();
-  if(!store)return old;
-  try{
-   const overlay=await getCatalogOverlay(store,source);
-   const byId=new Map(old.map(w=>[w.source_post_id,w]));
-   for(const [id,w] of overlay){
-    if(isApprovedPublic(w))byId.set(id,w);
-    else byId.delete(id);
-   }
-   return [...byId.values()];
-  }catch(e){console.warn('live_index_read_failed',String(e).slice(0,100));return old}
- 
+  // Only the new snapshot is a public catalogue. Legacy static/D1 rows are gone
+  // after the reset; a missing snapshot is an honest empty source.
+  if(!store)return [];
+  const snapshot=await readSnapshot(store,source);
+  return snapshot?snapshot.works:[];
  });
 }
+
 export async function onRequest({request}){
  if(request.method!=='GET')return json({ok:false,error:'method_not_allowed'},405);
  let store;

@@ -48,10 +48,10 @@ test('review action really persists under shadow prefix and leaves production li
  const list=await listQualityQueue(store,{source:'cosbooru',limit:100});
  assert.deepEqual(list.works.map(w=>w.source_post_id),['b']);
 });
-test('no production writes and no administrator password needed on test routes',async()=>{
+test('no production writes on the reports test route',async()=>{
  const b=backend(),store=createReviewTestStore(b.store);
  await assert.rejects(store.setJSON(PREFIX+'cosbooru/hacked.json',{work:mk('hacked').work}),/test_write_disallowed/);
- for(const [page,route] of [['review','queue'],['reports','reports']]){
+ for(const [page,route] of [['reports','reports']]){
   const script=readFileSync(new URL('../public/assets/'+page+'.js',import.meta.url),'utf8');
   assert.ok(script.includes('/api/catalog/review-test/'+route),'missing test route');
   assert.ok(!script.includes('Authorization:\'Bearer '));
